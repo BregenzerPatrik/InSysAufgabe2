@@ -11,6 +11,8 @@ object Test {
   val gson = new Gson()
   val keyArticle="Article:"
   val keyAuthor="Author:"
+  val referencedBy="Reference:"
+  val articlesByAuthor = "AuthorsArticle:"
 
   def main(args: Array[String]): Unit = {
     println(jedis.get("I"))
@@ -50,5 +52,30 @@ object Test {
   def authors(articleID:Long): Array[Author] ={
     val line = getArticle(articleID)
     line.authors
+  }
+  def addArticleByAuthor(line: Line): Unit ={
+    val authors= line.authors
+    if(authors!=null){
+      authors.foreach(author=> jedis.pipelined().lpush(articlesByAuthor+author.id,line.id.toString))
+    }
+  }
+  def addReferenceList(line: Line): Unit ={
+    val references = line.references
+    if (references!= null){
+      references.foreach(reference=> jedis.pipelined().lpush(referencedBy+line.id,reference.toString))
+    }
+  }
+  def referencedBy(articleID: Long): List[Line]={
+    jedis.lpop(referencedBy+articleID)
+    null
+  }
+  def mostArticles(): List[Author]={
+    null
+  }
+  def distinctAuthors(): Long={
+    0
+  }
+  def distinctAuthorsHyperLogLog(): Long={
+    0
   }
 }

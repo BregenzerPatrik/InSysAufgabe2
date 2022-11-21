@@ -1,13 +1,8 @@
+import scala.annotation.tailrec
+
 case class RedisArticle(id:Long,
-                        authors:Array[Long],
                         title:String,
-                        year:Int,
-                        n_citation:Int,
-                        page_start:String,
-                        page_end:String,
-                        doc_type:String,
-                        publisher:String,
-                        volume:String,
-                        issue:String,
-                        doi:String,
+                        authors:Array[Long],
                         references:Array[Long])
+
+

@@ -4,25 +4,33 @@ import scala.annotation.tailrec
 import scala.collection.immutable
 
 object RedisRead {
-  val gson = new Gson()
-  val jedis=RedisConnection.getConnection()
+  private val gson = new Gson()
+  private val jedis=RedisConnection.getConnection
 
   def titleByID(articleID:Long): String ={
-    val line = getArticle(articleID)
-    line.title
+    val redisArticle = getArticle(articleID)
+    redisArticle.title
   }
-  private def getArticle(articleID:Long): Line ={
+  private def getArticle(articleID:Long): RedisArticle ={
     val json = jedis.get(RedisConnection.keyArticle + articleID)
-    gson.fromJson(json, classOf[Line])
+    gson.fromJson(json, classOf[RedisArticle])
   }
   private def getAuthor(authorID:Long):Author={
     val jsonAuthor = jedis.get(RedisConnection.keyAuthor+authorID)
     gson.fromJson(jsonAuthor,classOf[Author])
   }
-
+  @tailrec
+  def getAuthorsFromIDS(ids: Set[Long],result:Array[Author]):Array[Author]={
+    if(ids.isEmpty){
+      return result
+    }
+    val nextAuthorID = ids.head
+    val nextAuthor = getAuthor(nextAuthorID)
+    getAuthorsFromIDS(ids-nextAuthorID,result:+nextAuthor)
+  }
   def authors(articleID:Long): Array[Author] ={
-    val line = getArticle(articleID)
-    line.authors
+    val article = getArticle(articleID)
+    getAuthorsFromIDS(article.authors.toSet,new Array[Author](article.authors.length))
   }
   @tailrec
   private def getReferencedByIDS(articleID: Long, result: Set[String]=new immutable.HashSet[String]()):Set[String] = {
@@ -34,27 +42,27 @@ object RedisRead {
     }
   }
   @tailrec
-  private def getAllArticle(articleID:Long, allIDs: Set[String],result: List[Line]= List[Line]()):List[Line] = {
+  private def getAllArticle(articleID:Long, allIDs: Set[String],result: List[RedisArticle]= List[RedisArticle]()):List[RedisArticle] = {
     if(allIDs.isEmpty){
       result
     }
     else {
       val thisElement = allIDs.head.toLong
       addReference(articleID,thisElement)
-      val thisLine = getArticle(thisElement)
-      getAllArticle(articleID,allIDs- thisElement.toString, result:+thisLine)
+      val thisArticle = getArticle(thisElement)
+      getAllArticle(articleID,allIDs- thisElement.toString, result:+thisArticle)
     }
   }
   @tailrec
-  private def getAllArticleFromAuthor(authorID:Long, allIDs: Set[String],result: List[Line]= List[Line]()):List[Line] = {
+  private def getAllArticleFromAuthor(authorID:Long, allIDs: Set[String],result: List[RedisArticle]= List[RedisArticle]()):List[RedisArticle] = {
     if(allIDs.isEmpty){
       result
     }
     else {
       val thisElement = allIDs.head.toLong
       addArticleByAuthor(authorID,thisElement)
-      val thisLine = getArticle(thisElement)
-      getAllArticleFromAuthor(authorID,allIDs- thisElement.toString, result:+thisLine)
+      val thisArticle = getArticle(thisElement)
+      getAllArticleFromAuthor(authorID,allIDs- thisElement.toString, result:+thisArticle)
     }
   }
 
@@ -68,30 +76,24 @@ object RedisRead {
     }
   }
 
-  def articles(authorID: Long): List[Line]={
-    val allLineIDs = getArticleByAuthor(authorID)
-    getAllArticleFromAuthor(authorID,allLineIDs)
+  def articles(authorID: Long): List[RedisArticle]={
+    val allArticleIDs = getArticleByAuthor(authorID)
+    getAllArticleFromAuthor(authorID,allArticleIDs)
   }
-  /*@tailrec
-  private def getMostArticles(result: Set[String]=new immutable.HashSet[String]()):Set[String]={
-    val most = jedis.zrangeWithScores(RedisConnection.mostArticles,-1,-1)
-    most.get(0)[3]
-    if(result.isEmpty)
 
-  }*/
   def mostArticles(): List[Author]={
     val most = jedis.zrange(RedisConnection.mostArticles,-1,-1)
-    val mostLong = most.get(0).toLong
-    val author = getAuthor(mostLong)
+    val mostID = most.get(0).toLong
+    val author = getAuthor(mostID)
     List(author)
   }
   def distinctAuthors(): Long={
-    jedis.scard(RedisConnection.distinctAuthors)
+    jedis.zcard(RedisConnection.mostArticles)
   }
   def distinctAuthorsHyperLogLog(): Long={
     jedis.pfcount(RedisConnection.distinctAuthorsHyperLogLog)
   }
-  def referencedBy(articleID: Long): List[Line]={
+  def referencedBy(articleID: Long): List[RedisArticle]={
     val allIDs = getReferencedByIDS(articleID:Long)
     getAllArticle(articleID,allIDs)
   }
